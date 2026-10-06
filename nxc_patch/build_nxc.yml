@@ -1,0 +1,78 @@
+name: Build Telegram 12.10.6 + NXC Fighter
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout NXC patch repository
+        uses: actions/checkout@v4
+
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build unzip
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
+      - name: Install Android SDK and NDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
+
+      - name: Clone Telegram 12.10.6
+        run: |
+          git clone --recursive https://github.com/DrKLO/Telegram.git telegram
+          cd telegram
+          git checkout f2908b1
+          git submodule update --init --recursive
+
+      - name: Apply NXC Fighter native patch
+        run: |
+          python3 nxc_patch/apply_nxc_patch.py
+
+      - name: Verify patch
+        run: |
+          test -f telegram/TMessagesProj/src/main/java/org/telegram/messenger/voip/NxcFighterProcessor.java
+          test -f telegram/TMessagesProj/src/main/java/org/telegram/ui/NxcFighterActivity.java
+          grep -q "nxcFighter.process" telegram/TMessagesProj/src/main/java/org/telegram/messenger/voip/AudioRecordJNI.java
+          grep -q "NxcFighterActivity" telegram/TMessagesProj/src/main/AndroidManifest.xml
+
+      - name: Build Telegram APK
+        working-directory: telegram
+        run: |
+          chmod +x gradlew
+          ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace --no-daemon
+
+      - name: Show APK files
+        run: |
+          find telegram/TMessagesProj_App/build/outputs/apk -type f -name "*.apk" -print
+
+      - name: Upload NXC APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telegram-12.10.6-NXC-Fighter-APK
+          path: telegram/TMessagesProj_App/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 7
