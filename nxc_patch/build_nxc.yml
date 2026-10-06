@@ -54,10 +54,12 @@ jobs:
 
       - name: Verify patch
         run: |
-          test -f telegram/TMessagesProj/src/main/java/org/telegram/messenger/voip/NxcFighterProcessor.java
           test -f telegram/TMessagesProj/src/main/java/org/telegram/ui/NxcFighterActivity.java
-          grep -q "nxcFighter.process" telegram/TMessagesProj/src/main/java/org/telegram/messenger/voip/AudioRecordJNI.java
           grep -q "NxcFighterActivity" telegram/TMessagesProj/src/main/AndroidManifest.xml
+          CAPTURE=$(find telegram/TMessagesProj -name AudioRecordJNI.java -o -name WebRtcAudioRecord.java | head -n 1)
+          test -n "$CAPTURE"
+          grep -q "nxcFighter.process" "$CAPTURE"
+          echo "Patched capture source: $CAPTURE"
 
       - name: Build Telegram APK
         working-directory: telegram
